@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vendor Excel Sheet</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>Vendor Excel Sheet</h1>
+
+    <!-- WHITE BOX FOR EXCEL SHEET -->
+    <div class="excel-card">
+
+      <!-- TOP BAR -->
+      <div class="top-bar">
+
+        <div class="Vendor-info">
+          <p><b>Vendor Name:</b> <span id="customerDisplay"></span></p>
+          <p><b>Date:</b> <span id="dateDisplay"></span></p>
+        </div>
+
+        <div>
+          <button onclick="addColumn()">➕ Add Column</button>
+
+          <label class="upload-small">
+            📤 Upload file
+            <input type="file" id="excelUpload" accept=".xlsx,.xls" hidden>
+          </label>
+        </div>
+
+      </div>
+
+      <!-- TABLE -->
+      <div class="table-wrapper">
+        <table id="vendorTable">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Sl.no</th>
+              <th>Customer Name</th>
+              <th>Part.no</th>
+              <th>Description</th>
+              <th>Make</th>
+              <th>QTY</th>
+              <th>Price per unit</th>
+              <th>Total value</th>
+              <th>HSN code</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      <button class="delete-btn" onclick="deleteSelectedRows()">🗑 Delete</button>
+      <button class="save-btn" onclick="saveVendor()">Save Customer Data</button>
+
+    </div>
+
+  </div>
+
+<script>
+  let rowCount = 0;
+
+  const vendorName = localStorage.getItem("vendor_name");
+  const vendorDate = localStorage.getItem("vendor_date");
+
+  document.getElementById("customerDisplay").innerText = vendorName || "";
+  document.getElementById("dateDisplay").innerText = vendorDate || "";
+
+  function handleKeyNavigation(e) {
+    const td = e.target.closest("td");
+    const tr = e.target.closest("tr");
+    const colIndex = [...tr.children].indexOf(td);
+    let target;
+
+    switch (e.key) {
+      case "ArrowRight":
+        target = tr.children[colIndex + 1];
+        break;
+      case "ArrowLeft":
+        target = tr.children[colIndex - 1];
+        break;
+      case "ArrowDown":
+        if (!tr.nextElementSibling) addRow();
+        target = tr.nextElementSibling?.children[colIndex];
+        break;
+      case "ArrowUp":
+        target = tr.previousElementSibling?.children[colIndex];
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (!tr.nextElementSibling) addRow();
+        target = tr.nextElementSibling.children[2];
+        break;
+      default:
+        return;
+    }
+
+    target?.querySelector("input")?.focus();
+  }
+
+  function addRow() {
+    rowCount++;
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td><input type="checkbox" class="row-check"></td>
+      <td>${rowCount}</td>
+      <td><input type="text" class="customer_name" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="text" class="part_no" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="text" class="description" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="text" class="make" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="number" class="qty" oninput="calculateTotal(this)" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="number" class="price_per_unit" oninput="calculateTotal(this)" onkeydown="handleKeyNavigation(event)"></td>
+      <td><input type="number" class="total_value" readonly></td>
+      <td><input type="text" class="hsn_code" onkeydown="handleKeyNavigation(event)"></td>
+    `;
+
+    tableBody.appendChild(row);
+  }
+
+  function deleteSelectedRows() {
+    document.querySelectorAll("#tableBody tr").forEach(row => {
+      if (row.querySelector(".row-check").checked) row.remove();
+    });
+
+    [...tableBody.children].forEach((tr, i) => tr.children[1].innerText = i + 1);
+    rowCount = tableBody.children.length;
+    if (rowCount === 0) addRow();
+  }
+
+  function calculateTotal(el) {
+    const row = el.closest("tr");
+    row.querySelector(".total_value").value =
+      (row.querySelector(".qty").value || 0) *
+      (row.querySelector(".price_per_unit").value || 0);
+  }
+
+  function addColumn() {
+    const headerRow = vendorTable.querySelector("thead tr");
+    const headers = [...headerRow.children];
+    const hsnIndex = headers.findIndex(h => h.innerText.includes("HSN"));
+
+    const th = document.createElement("th");
+    th.innerHTML = `<input type="text" placeholder="New Column">`;
+    headerRow.insertBefore(th, headerRow.children[hsnIndex + 1] || null);
+
+    document.querySelectorAll("#tableBody tr").forEach(row => {
+      const td = document.createElement("td");
+      td.innerHTML = `<input type="text" onkeydown="handleKeyNavigation(event)">`;
+      row.insertBefore(td, row.children[hsnIndex + 1] || null);
+    });
+  }
+
+  document.getElementById("excelUpload").addEventListener("change", () => {
+    const file = excelUpload.files[0];
+    if (!file) return;
+
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("vendor_name", vendorName);
+    fd.append("sheet_date", vendorDate);
+
+    fetch("http://localhost:5000/uploadExcel", {
+      method: "POST",
+      body: fd
+    })
+    .then(() => location.reload())
+    .catch(() => alert("Upload failed"));
+  });
+
+  async function saveVendor() {
+    const items = [...tableBody.children].map(r => ({
+      customer_name: r.querySelector(".customer_name").value,
+      part_no: r.querySelector(".part_no").value,
+      description: r.querySelector(".description").value,
+      make: r.querySelector(".make").value,
+      qty: r.querySelector(".qty").value,
+      price_per_unit: r.querySelector(".price_per_unit").value,
+      total_value: r.querySelector(".total_value").value,
+      hsn_code: r.querySelector(".hsn_code").value
+    }));
+
+    await fetch("http://localhost:5000/saveSheet", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendor_name: vendorName,
+        sheet_date: vendorDate,
+        items
+      })
+    });
+
+    alert("Saved successfully");
+    location.href = "/";
+  }
+
+  addRow();
+</script>
+
+</body>
+</html>

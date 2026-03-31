@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Vendor Entry</title>
+  
+</head>
+
+<body>
+
+  <div class="container">
+
+    <h1>Vendor Details Form</h1>
+
+    <!-- VENDOR FORM (WHITE CARD) -->
+    <form id="vendorForm">
+      <input
+        type="text"
+        id="vendor_name"
+        placeholder="Enter Vendor Name"
+        required
+      >
+
+      <input
+        type="date"
+        id="vendor_date"
+        required
+      >
+
+      <button type="submit">Next ➝ Add Vendor Details</button>
+    </form>
+
+    <!-- VENDOR LIST -->
+    <h2>Vendors</h2>
+
+    <input
+      type="text"
+      id="searchVendor"
+      placeholder="Search vendor..."
+      oninput="filterVendors()"
+    >
+
+    <div id="vendorContainer" class="vendors-wrapper"></div>
+
+  </div>
+
+<script>
+  let allVendors = [];
+
+  document.getElementById("vendorForm").addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    const vendorName = vendor_name.value.trim();
+    const vendorDate = vendor_date.value;
+
+    if (!vendorName || !vendorDate) {
+      alert("Vendor name & date required");
+      return;
+    }
+
+    localStorage.setItem("vendor_name", vendorName);
+    localStorage.setItem("vendor_date", vendorDate);
+
+    window.location.href = "./details.html";
+  });
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr);
+    return d.toISOString().split("T")[0];
+  }
+
+  async function loadVendors() {
+    const res = await fetch("http://localhost:5000/allSheets");
+    allVendors = await res.json();
+    renderVendors(allVendors);
+  }
+
+  function renderVendors(vendors) {
+    const container = document.getElementById("vendorContainer");
+    container.innerHTML = "";
+
+    if (vendors.length === 0) {
+      container.innerHTML = "<p>No vendors found</p>";
+      return;
+    }
+
+    vendors.forEach(v => {
+      const div = document.createElement("div");
+
+      div.innerHTML = `
+        <b>${v.vendor_name}</b><br>
+        Date: ${formatDate(v.sheet_date)}<br>
+      <br>
+
+        <button onclick="openVendor(${v.sheet_id}, '${v.vendor_name}', '${v.sheet_date}')">Open</button>
+      `;
+
+      container.appendChild(div);
+    });
+  }
+
+  function filterVendors() {
+    const keyword = searchVendor.value.toLowerCase();
+    const filtered = allVendors.filter(v =>
+      v.vendor_name.toLowerCase().includes(keyword)
+    );
+    renderVendors(filtered);
+  }
+
+  function openVendor(id, name, date) {
+    localStorage.setItem("vendor_name", name);
+    localStorage.setItem("vendor_date", formatDate(date));
+    localStorage.setItem("sheet_id", id);
+    window.location.href = "./details.html";
+  }
+
+  async function editVendor(id, oldName, oldDate) {
+    const newName = prompt("Edit Vendor Name:", oldName);
+    if (!newName) return;
+
+    const newDate = prompt("Edit Date (YYYY-MM-DD):", oldDate);
+    if (!newDate) return;
+
+    await fetch(`http://localhost:5000/updateVendor/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vendor_name: newName,
+        sheet_date: newDate
+      })
+    })
+    
+
+    alert("Vendor updated");
+    loadVendors();
+  }
+
+  async function deleteVendor(id) {
+    if (!confirm("Are you sure you want to delete this vendor?")) return;
+
+    await fetch(`http://localhost:5000/deleteVendor/${id}`, {
+      method: "DELETE"
+    });
+
+    alert("Vendor deleted");
+    loadVendors();
+  }
+
+  loadVendors();
+</script>
+
+</body>
+</html>
